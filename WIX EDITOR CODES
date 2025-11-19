@@ -1,0 +1,128 @@
+1)  The code on the Be a Lender page, which directs users to their unique page when “View My
+Items” is clicked:
+
+import wixUsers from 'wix-users';
+import wixLocation from 'wix-location';
+
+$w.onReady(function () {
+  const user = wixUsers.currentUser;
+  const lenderId = user.id;
+  $w('#myItemsBtn').onClick(() => {
+    wixLocation.to(`/user-items/${lenderId}`);
+  });
+});
+
+2)  The code on the My Requests page directs users to their unique page accordingly, depending on
+the button they clicked:
+
+import wixUsers from 'wix-users';
+import wixLocation from 'wix-location';
+
+$w.onReady(() => {
+    $w("#outgoing").onClick(() => {
+        const user = wixUsers.currentUser;
+        const userId = user.id;
+        wixLocation.to(`/requests/${userId}`);
+    });
+});
+
+$w.onReady(() => {
+    $w("#incoming").onClick(() => {
+        const user = wixUsers.currentUser;
+            const userId = user.id;
+            wixLocation.to(`/requests-1/${userId}`);
+    });
+});
+
+3) The code for the lender to approve or reject the borrower's request:
+
+import wixData from 'wix-data';
+
+$w.onReady(() => {
+    $w("#listRepeater").onItemReady(($item, itemData) => {
+		    // Hide buttons if already decided
+    	if (itemData.Status === "Approved" || itemData.Status === "Rejected" || itemData.Status === "Item returned") {
+        $item("#approvebutton").hide();
+        $item("#rejectbutton").hide();
+        $item("#returned").hide();
+        }      
+        $item("#approvebutton").onClick(() => {
+            updateStatus(itemData._id, "Approved", $item);
+        });
+        $item("#rejectbutton").onClick(() => {
+            updateStatus(itemData._id, "Rejected", $item);
+        });
+        $item("#returned").onClick(() => {
+            updateStatus(itemData._id, "Item returned", $item);
+        });
+    });
+});
+
+function updateStatus(itemId, newStatus, $item) {
+    wixData.get("Requests1", itemId)
+        .then((item) => {
+            item.Status = newStatus;
+            return wixData.update("Requests1", item);
+        })
+        .then(() => {
+            $item("#approvebutton").hide();
+            $item("#rejectbutton").hide();
+            $item("returned").hide();
+        })
+        .catch((err) => {
+            console.error("Error updating status:", err);
+        });
+}
+
+4)  The code to calculate the total amount price, by adding the deposit and pricePerHour*total
+hours:
+
+import wixData from 'wix-data';
+$w.onReady(() => {
+    $w("#listRepeater").onItemReady(($item, itemData) => {
+            const startStr = $item("#startTime").text?.trim();
+            const endStr = $item("#endTime").text?.trim();
+            const pricePerHour = parseFloat($item("#pricePerHour").text);
+            const deposit = parseFloat($item("#deposit").text);
+
+            // Convert text like "9.00 am" or "15.30" → 24h decimal hour
+            function parseTimeToHours(str) {
+                let time = str.toLowerCase().replace(/\s+/g, "");
+                let hours = 0;
+                let minutes = 0;
+                const isPM = time.includes("pm");
+                const isAM = time.includes("am");
+                time = time.replace("am", "").replace("pm", "");
+                // Split by ":" or "."
+                const parts = time.split(/[.:]/);
+                hours = parseInt(parts[0]) || 0;
+                minutes = parseInt(parts[1]) || 0;
+                if (isPM && hours < 12) hours += 12;
+                if (isAM && hours === 12) hours = 0;
+                return hours + (minutes / 60);
+            }
+            const startH = parseTimeToHours(startStr);
+            const endH = parseTimeToHours(endStr);
+            const totalHours = endH - startH;
+            const totalAmount = (totalHours * pricePerHour) + deposit;
+            // Save to CMS
+            wixData.get("Requests1", itemData._id)
+                .then((record) => {
+                    record.paymentAmount = totalAmount;
+                    return wixData.update("Requests1", record);
+                })
+                .catch((err) => {
+                    console.error("Error updating Requests:", err);
+                });
+        });
+    });
+
+
+
+
+
+
+
+
+
+
